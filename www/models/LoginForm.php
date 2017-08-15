@@ -47,8 +47,30 @@ class LoginForm extends Model
         if (!$this->hasErrors()) {
             $user = $this->getUser();
 
-            if (!$user || !$user->validatePassword($this->password)) {
+            if (!$user) {
+                //Не корректный логин
                 $this->addError($attribute, 'Неверные данные.');
+            } else if(!$user->validatePassword($this->password)) {
+                //Сценарий ввода с не корректным паролем
+                $banList = new BanList();
+                if(!BanList::findIdentity($user->id)) {
+                    $banList->addUser($user->id);
+                    $this->addError($attribute, 'Неверные данные.');
+                } else {
+                    $banList->updateUser($user->id);
+                    $this->addError($attribute, 'Неверные данные.');
+                }
+            } else {
+                //Корректный пароль. Валидация на бан
+                if($banList = BanList::findIdentity($user->id)) {
+                    if(!$banList->validateBanUser()) {
+                        //Пользователь уже забанен
+                        $this->addError($attribute, 'Попробуйте еще раз через '.($banList->expire - time()).' секунд');
+                    } else {
+                        //Пользователь еще не забанен и ввел ВЕРНЫЙ пароль - удаляем из банлиста
+                        $banList->deleteUser();
+                    }
+                }
             }
         }
     }
